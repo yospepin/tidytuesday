@@ -1,0 +1,99 @@
+---
+title: "Tidy Tuesday 1"
+format: html
+editor: visual
+---
+
+```{r, eval = FALSE}}
+# Load the data using tidytuesdayR package
+tuesdata <- tidytuesdayR::tt_load('2024-12-31')
+```
+```{r}
+book <- tuesdata$book
+broadcast_media <- tuesdata$broadcast_media
+journalism <- tuesdata$journalism
+leadership <- tuesdata$leadership
+restaurant_and_chef <- tuesdata$restaurant_and_chef
+```
+
+```{r}
+library(tidyverse)
+library(sf)
+library(stringr)
+library(tidytuesdayR)
+library(maps)
+library(ggplot2)
+library(patchwork)
+library(grid)
+
+# Load the data using tidytuesdayR package
+tuesdata <- tidytuesdayR::tt_load('2024-12-31')
+restaurant_and_chef <- tuesdata$restaurant_and_chef
+
+winners_data <- restaurant_and_chef %>%
+  filter(rank == "Winner") %>%
+  mutate(state = str_extract(city, "([^,]+)$") %>% str_trim() %>% tolower()) %>%
+  filter(!state %in% c("hawaii", "ontario", "mexico city")) %>%
+  group_by(state) %>%
+  summarise(winner_count = n(), .groups = "drop")
+
+all_states <- tibble(state = tolower(state.name)) %>%
+  bind_rows(tibble(state = tolower(c(
+    "arkansas", "delaware", "idaho", "indiana", "iowa", "montana", "nebraska",
+    "new hampshire", "north dakota", "oklahoma", "south dakota", "utah",
+    "vermont", "wyoming"))))
+
+winners_count_complete <- all_states %>%
+  left_join(winners_data, by = "state") %>%
+  mutate(winner_count = replace_na(winner_count, 0))
+
+us_states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE)) %>%
+  rename(state = ID) %>%
+  mutate(state = tolower(state))  
+
+map_data <- us_states %>%
+  left_join(winners_count_complete, by = "state")
+
+map_plot <- ggplot(map_data) +
+  geom_sf(aes(fill = winner_count), color = "white") +
+  scale_fill_gradientn(
+    colors = c("grey", "lightgoldenrod", "springgreen4", "dodgerblue4"),
+    values = scales::rescale(c(0, 1, 20, max(map_data$winner_count, na.rm = TRUE))), 
+    name = "Winner Count"
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of James Beard Award Winners by State",
+    subtitle = "Includes states with zero winners",
+    caption = "Data: TidyTuesday 2024-12-31"
+  ) +
+  theme(
+    legend.position = "right",
+    panel.grid = element_blank()
+  )
+
+winners_by_year <- restaurant_and_chef %>%
+  filter(rank == "Winner") %>%
+  mutate(state = str_extract(city, "([^,]+)$") %>% str_trim() %>% tolower(),
+         year = as.numeric(str_extract(year, "\\d{4}"))) %>%
+  filter(!state %in% c("hawaii", "ontario", "mexico city")) %>%
+  filter(!is.na(state)) %>%  
+  group_by(year, state) %>%
+  summarise(winner_count = n(), .groups = "drop")
+
+bar_plot <- ggplot(winners_by_year, aes(x = factor(year), y = winner_count, fill = state)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(x = NULL, y = "Number of Winners", title = "Winners by State and Year") +
+  theme_minimal() +
+  scale_fill_viridis_d() +  
+  theme(
+    axis.text.x = element_text(size = 5, angle = 45, hjust = 1), 
+    legend.text = element_text(size = 6),
+    legend.position = "bottom",
+    legend.key.size = unit(0.3, "cm")) +
+  guides(fill = guide_legend(nrow = 4, title = NULL))
+
+map_plot + bar_plot + plot_layout(
+  heights = c(3, 1) )
+```
+

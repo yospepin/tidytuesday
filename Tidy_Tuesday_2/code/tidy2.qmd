@@ -1,0 +1,100 @@
+---
+title: "Tidy Tuesday 2"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidytuesdayR)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+library(patchwork)
+
+tuesdata <- tidytuesdayR::tt_load('2024-12-10')
+```
+
+```{r}
+parfumo_data_clean <- tuesdata$parfumo_data_clean
+```
+
+
+```{r}
+top_500_perfumes <- parfumo_data_clean %>%
+  filter(Rating_Count > 0) %>%
+  arrange(desc(Rating_Count)) %>%
+  slice_head(n = 500)
+
+main_accords_data <- top_500_perfumes %>%
+  select(Name, Main_Accords, Rating_Value, Rating_Count) %>%
+  mutate(Main_Accords = sapply(strsplit(as.character(Main_Accords), ","), function(x) trimws(x[1])))
+
+top_notes_data <- top_500_perfumes %>%
+  filter(!is.na(Top_Notes)) %>%
+  select(Name, Top_Notes, Rating_Value, Rating_Count) %>%
+  mutate(Top_Notes = sapply(strsplit(as.character(Top_Notes), ","), function(x) trimws(x[1])))
+
+main_accords_analysis <- main_accords_data %>%
+  group_by(Main_Accords) %>%
+  summarise(
+    avg_rating = mean(Rating_Value, na.rm = TRUE),
+    total_reviews = sum(Rating_Count, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_reviews)) %>%
+  slice_head(n = 10)
+
+top_notes_analysis <- top_notes_data %>%
+  group_by(Top_Notes) %>%
+  summarise(
+    avg_rating = mean(Rating_Value, na.rm = TRUE),
+    total_reviews = sum(Rating_Count, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_reviews)) %>%
+  slice_head(n = 10)
+```
+```{r}
+# Plot for Main Accords
+main_accords_plot <- ggplot(main_accords_analysis, aes(x = reorder(Main_Accords, avg_rating), y = avg_rating, fill = Main_Accords)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Top 10 Most Frequent Main Accords and Their Average Ratings",
+    x = NULL,
+    y = "Average Rating",
+    fill = "Main Accord"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_minimal() +
+  coord_cartesian(ylim = c(6, 8)) +
+  theme(
+    axis.text.x = element_text(size = 10, hjust = 1), 
+    legend.text = element_text(size = 8),
+    legend.key.size = unit(0.8, "cm"),
+    plot.title = element_text(size = 18, face = "bold"))
+```
+
+```{r}
+# Plot for Top Notes
+top_notes_plot <- ggplot(top_notes_analysis, aes(x = reorder(Top_Notes, avg_rating), y = avg_rating, fill = Top_Notes)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Top 10 Most Frequent Top Notes and Their Average Ratings",
+    x = NULL,
+    y = "Average Rating",
+    fill = "Top Note"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_minimal() +
+  coord_cartesian(ylim = c(6, 8)) +
+  theme(
+    axis.text.x = element_text(size = 10, hjust = 1), 
+    legend.text = element_text(size = 8),
+    legend.key.size = unit(0.8, "cm"),
+    plot.title = element_text(size = 18, face = "bold"))
+
+main_accords_plot / top_notes_plot
+
+```
+
